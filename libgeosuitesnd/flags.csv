@@ -1,8 +1,8 @@
 code,name,value
 R1,extra_spin,1
 R2,extra_spin,0
-y1,flushing,1
-y2,flushing,0
+Y1,flushing,1
+Y2,flushing,0
 S1,ramming,1
 S2,ramming,0
 D1,ramming,1

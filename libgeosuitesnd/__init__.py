@@ -64,7 +64,10 @@ def parse_header_information(data, asterisk, borehole_id):
         year = int(date_components[2])
         date = str(year) + '-' + str(month) + '-' + str(day)
     except Exception:
-        logger.info(borehole_id + ': no date')
+        try:
+            logger.info(borehole_id + ': no date')
+        except TypeError:
+            logger.info('no date')
         day = None
         month = None
         year = None

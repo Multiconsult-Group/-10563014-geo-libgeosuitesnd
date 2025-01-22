@@ -1,14 +1,7 @@
-from os.path import splitext, basename
 from itertools import count
 import numpy as np
-import datetime
-import time
 import pandas as pd
-import warnings
-import zipfile
 import codecs
-import os
-import io
 import logging
 import pkg_resources
 
@@ -81,14 +74,17 @@ def parse_header_information(data, asterisk, borehole_id):
     stop_desc = stop_reason_by_code.get(stop_code, "geosuitesnd_%s" % stop_code)
     return method_code, method_name, day, month, year, date, stop_code, stop_desc
 
-def parse_string_data_column(df_data, raw_data_nestedlist,n_data_col):
+def parse_string_data_column(df_data, raw_data_nestedlist, n_data_col):
     depth_bedrock = None
+    extra_spin_flag = "extra_spin"
+    code_70_indices = []
+    still_code_70 = True
 
     string_data = [x[n_data_col:] for x in raw_data_nestedlist]
 
     df_data["comments"] = ""
-    
-    for count, string in enumerate(string_data):
+
+    for count_index, string in enumerate(string_data):
         line_flags = {}
         for flag in string:
             if flag in flags.index:
@@ -96,23 +92,39 @@ def parse_string_data_column(df_data, raw_data_nestedlist,n_data_col):
                 if isinstance(flags_affected, pd.Series):
                     line_flags[flags_affected['name']] = flags_affected['value']
                 else:
-                    line_flags.update(dict(zip( flags_affected['name'].values, flags_affected['value'].values)))
-
+                    line_flags.update(dict(zip(flags_affected['name'].values, flags_affected['value'].values)))
 
         if line_flags.get("depth_bedrock", 0) and depth_bedrock is None:
-            depth_bedrock = df_data.depth[count]
+            depth_bedrock = df_data.depth[count_index]
         for key, value in line_flags.items():
             if key != "depth_bedrock":
                 if key not in df_data.columns:
                     df_data[key] = -1
-                df_data.loc[count, key] = value
+                df_data.loc[count_index, key] = value
 
-        df_data.loc[count, "comments"] = ' '.join(string)
+        df_data.loc[count_index, "comments"] = ' '.join(string)
+
+        # Track indices of code 70
+        if extra_spin_flag in line_flags:
+            if "70" in string and still_code_70:
+                still_code_70 = True
+                code_70_indices.append(count_index)
+            elif "70" in string and not still_code_70:
+                still_code_70 = True
+            elif "71" in string:
+                still_code_70 = False
+
+    # Set values to 0 between successive occurrences of code 70
+    if len(code_70_indices) > 1:
+        for i in code_70_indices:
+            start = code_70_indices[i]
+            end = code_70_indices[i + 1] - 1
+            df_data.loc[start:end, extra_spin_flag] = 0
 
     for flag in flags["name"].unique():
         if flag != "depth_bedrock":
             df_data[flag] = df_data[flag].replace(-1, np.nan).ffill().fillna(0)
-    
+
     return df_data, depth_bedrock
 
 def parse_borehole_data(data, method_code, asterisk_lines,asterisk_line_idx, borehole_id):
@@ -165,7 +177,7 @@ def parse(input_filename, borehole_id=None):
     def load(f):
         f=codecs.getreader('utf8')(f, errors='ignore')
         data = f.readlines()
-        return [l.strip() for l in data]
+        return [line.strip() for line in data]
         
     if isinstance(input_filename, str):
         with open(input_filename, "rb") as f:

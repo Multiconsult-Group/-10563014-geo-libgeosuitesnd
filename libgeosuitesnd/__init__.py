@@ -114,16 +114,16 @@ def parse_string_data_column(df_data, raw_data_nestedlist, n_data_col):
             elif "71" in string:
                 still_code_70 = False
 
-    # Set values to 0 between successive occurrences of code 70
+    for flag in flags["name"].unique():
+        if flag != "depth_bedrock":
+            df_data[flag] = df_data[flag].replace(-1, np.nan).ffill().fillna(0)
+            
     if len(code_70_indices) > 1:
         for i in code_70_indices:
             start = code_70_indices[i]
             end = code_70_indices[i + 1] - 1
             df_data.loc[start:end, extra_spin_flag] = 0
-
-    for flag in flags["name"].unique():
-        if flag != "depth_bedrock":
-            df_data[flag] = df_data[flag].replace(-1, np.nan).ffill().fillna(0)
+            code_70_indices = code_70_indices[i + 1:]
 
     return df_data, depth_bedrock
 
